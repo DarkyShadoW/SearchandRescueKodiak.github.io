@@ -88,6 +88,7 @@ button.alt{background:var(--raise);border:1px solid var(--line)}
 button.big small.tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.95;margin-bottom:2px}
 #pad.gp{justify-content:flex-end;padding-bottom:10px}#pad.gp .dp{display:none}#pad.gp .ac{grid-template-columns:repeat(2,66px)}#pad.gp .ac button{height:46px;font-size:10px;color:var(--ink);background:rgba(15,38,55,.55)}#pad.gp button i{font-size:10px;font-weight:700}
 .gp-focus{outline:2px solid var(--hi)!important;outline-offset:2px;box-shadow:0 0 0 4px rgba(246,198,47,.25)}
+.gp-edit{outline:2px solid var(--stripe)!important;outline-offset:2px;box-shadow:0 0 0 4px rgba(232,80,42,.38);background-color:rgba(232,80,42,.18)!important}
 .gp-status{display:flex;align-items:center;gap:12px;background:var(--sea);border:1px solid var(--line);padding:10px 12px;margin-bottom:12px}
 .gp-status b{display:block;font-size:14px;color:var(--ink)}.gp-status small{display:block;font-size:12px;color:var(--mute)}
 .gp-dot{width:10px;height:10px;border-radius:50%;background:#4a525a;flex:none}.gp-dot.on{background:#5fe08a;box-shadow:0 0 8px rgba(95,224,138,.7)}

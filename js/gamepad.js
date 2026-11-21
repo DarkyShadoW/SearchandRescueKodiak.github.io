@@ -320,11 +320,19 @@ function scanActiveGamepad() {
   return getActiveGamepad();
 }
 
+let navEditing = false;
+
+function setNavEditing(on) {
+  navEditing = !!on && !!navFocusEl && (navFocusEl.tagName === 'SELECT' || (navFocusEl.tagName === 'INPUT' && navFocusEl.type === 'range'));
+  if (navFocusEl) navFocusEl.classList.toggle('gp-edit', navEditing);
+}
+
 function clearNavFocus() {
   if (navFocusEl) {
-    navFocusEl.classList.remove('gp-focus');
+    navFocusEl.classList.remove('gp-focus', 'gp-edit');
     navFocusEl = null;
   }
+  navEditing = false;
 }
 
 function getActiveOverlay() {
@@ -343,7 +351,8 @@ function getNavItems(ov) {
 }
 
 function setNavFocus(el) {
-  if (navFocusEl && navFocusEl !== el) navFocusEl.classList.remove('gp-focus');
+  if (navFocusEl && navFocusEl !== el) navFocusEl.classList.remove('gp-focus', 'gp-edit');
+  navEditing = false;
   navFocusEl = el || null;
   if (navFocusEl) {
     navFocusEl.classList.add('gp-focus');
@@ -352,11 +361,42 @@ function setNavFocus(el) {
   }
 }
 
-function moveNavFocus(items, dir) {
+function moveNavFocus2D(items, sx, sy) {
   if (!items.length) return;
-  let idx = items.indexOf(navFocusEl);
-  if (idx < 0) idx = dir > 0 ? 0 : items.length - 1;
-  else idx = (idx + dir + items.length) % items.length;
+  if (!navFocusEl || !items.includes(navFocusEl)) {
+    setNavFocus(items[0]);
+    return;
+  }
+  const cur = navFocusEl.getBoundingClientRect();
+  const cx = cur.left + cur.width / 2;
+  const cy = cur.top + cur.height / 2;
+  let best = null;
+  let bestScore = Infinity;
+
+  for (const el of items) {
+    if (el === navFocusEl) continue;
+    const r = el.getBoundingClientRect();
+    const ex = r.left + r.width / 2;
+    const ey = r.top + r.height / 2;
+    const dx = ex - cx;
+    const dy = ey - cy;
+
+    if (sx !== 0 && sx * dx > 4 && Math.abs(dy) <= Math.max(cur.height, r.height) * 1.1) {
+      const score = Math.abs(dx) + Math.abs(dy) * 2.5;
+      if (score < bestScore) { bestScore = score; best = el; }
+    } else if (sy !== 0 && sy * dy > 4) {
+      const score = Math.abs(dy) + Math.abs(dx) * 0.45;
+      if (score < bestScore) { bestScore = score; best = el; }
+    }
+  }
+
+  if (best) {
+    setNavFocus(best);
+    return;
+  }
+  // Fallback secuencial si no hay vecino directo en esa dirección
+  const step = sx !== 0 ? sx : sy;
+  const idx = (items.indexOf(navFocusEl) + step + items.length) % items.length;
   setNavFocus(items[idx]);
 }
 
@@ -381,10 +421,6 @@ function adjustControl(el, dir) {
     el.selectedIndex = next;
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
-  } else {
-    const ov = getActiveOverlay();
-    const items = getNavItems(ov);
-    moveNavFocus(items, dir);
   }
 }
 
@@ -554,15 +590,38 @@ export function pollGamepad(dt) {
     const sx = Math.sign(dx);
     const sy = Math.sign(dy);
 
+    if (navEditing) {
+      const dir = sx !== 0 ? sx : sy;
+      if (dir !== 0) {
+        if (navRepeat.x !== dir) {
+          adjustControl(navFocusEl, dir);
+          navRepeat.x = dir;
+          navRepeat.tx = 0.32;
+        } else {
+          navRepeat.tx -= dt;
+          if (navRepeat.tx <= 0) {
+            adjustControl(navFocusEl, dir);
+            navRepeat.tx = 0.09;
+          }
+        }
+      } else {
+        navRepeat.x = 0;
+      }
+      if (justPressed.includes(0) || justPressed.includes(1)) {
+        setNavEditing(false);
+      }
+      return;
+    }
+
     if (sy !== 0) {
       if (navRepeat.y !== sy) {
-        moveNavFocus(items, sy);
+        moveNavFocus2D(items, 0, sy);
         navRepeat.y = sy;
         navRepeat.ty = 0.34;
       } else {
         navRepeat.ty -= dt;
         if (navRepeat.ty <= 0) {
-          moveNavFocus(items, sy);
+          moveNavFocus2D(items, 0, sy);
           navRepeat.ty = 0.11;
         }
       }
@@ -572,14 +631,14 @@ export function pollGamepad(dt) {
 
     if (sx !== 0) {
       if (navRepeat.x !== sx) {
-        adjustControl(navFocusEl, sx);
+        moveNavFocus2D(items, sx, 0);
         navRepeat.x = sx;
-        navRepeat.tx = 0.32;
+        navRepeat.tx = 0.34;
       } else {
         navRepeat.tx -= dt;
         if (navRepeat.tx <= 0) {
-          adjustControl(navFocusEl, sx);
-          navRepeat.tx = 0.08;
+          moveNavFocus2D(items, sx, 0);
+          navRepeat.tx = 0.11;
         }
       }
     } else {
@@ -587,8 +646,11 @@ export function pollGamepad(dt) {
     }
 
     if (justPressed.includes(0) && navFocusEl) {
-      if (navFocusEl.tagName === 'SELECT') adjustControl(navFocusEl, 1);
-      else navFocusEl.click();
+      if (navFocusEl.tagName === 'SELECT' || (navFocusEl.tagName === 'INPUT' && navFocusEl.type === 'range')) {
+        setNavEditing(true);
+      } else {
+        navFocusEl.click();
+      }
     } else if (justPressed.includes(1)) {
       handleBackAction();
     } else if (justPressed.includes(9)) {
