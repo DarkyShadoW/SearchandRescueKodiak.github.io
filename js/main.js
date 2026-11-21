@@ -13,6 +13,10 @@ import {
   musInit, musSync, musLabel,
   sndInit, sndUpdate, radioTx, beep, boomSnd, xMute, c130Snd
 } from './audio.js';
+import {
+  initGamepad, pollGamepad, getFlightInput, getHoistInput, getPhotoPanInput,
+  getInputMode, getGlyph, rumble, stopRumble, openGamepadModal
+} from './gamepad.js';
 
 const $=s=>document.querySelector(s);
 const wrap=$('#wrap'),cv=$('#cv'),hc=$('#hud'),hx=hc.getContext('2d');let ctx=cv.getContext('2d');
@@ -88,8 +92,27 @@ function heightAt(v,o){let h=0;for(const p of v.prof)if(o>=p[0]&&o<=p[1]&&p[2]>h
 function deckY(v,o){return v.brk?v.y-heightAt(v,o)+v.bo*Math.sin(v.ang)+(o-v.bo)*Math.sin(v.ang+(o<v.bo?1:-1)*v.brk*.2)+v.brk*12:v.y-heightAt(v,o)+o*Math.sin(v.ang);}
 function vesselAt(x,pad=0){for(const v of vessels)if(!v.gone&&v.sink<.97&&Math.abs(x-v.x)<v.half-1+pad)return v;return null;}
 function surfAt(x){let s=Math.min(groundY(x),wave(x));const v=vesselAt(x);if(v&&heightAt(v,x-v.x))s=Math.min(s,deckY(v,x-v.x));return s;}
+function fmtInputHints(t,landed=!!(heli&&heli.landed)){
+  if(getInputMode()!=='gamepad')return t;
+  const g=c=>getGlyph(c,landed);
+  return t
+    .replace(/↑(?=\s+(?:para despegar|to take off))/g,g('ArrowUp'))
+    .replace(/\(BAT\)/g,`(${g('KeyB')})`)
+    .replace(/\(ENG 1\)/g,`(${g('Digit1',true)})`)
+    .replace(/\(ENG 2\)/g,`(${g('Digit2',true)})`)
+    .replace(/\(D\)/g,`(${g('KeyD')})`)
+    .replace(/\(W\)/g,`(${g('KeyW')})`)
+    .replace(/\(S\)/g,`(${g('KeyS')})`)
+    .replace(/\(T\)/g,`(${g('KeyT')})`)
+    .replace(/\(G\)/g,`(${g('KeyG',false)})`)
+    .replace(/\(F\)/g,`(${g('KeyF')})`)
+    .replace(/\(H\)/g,`(${g('KeyH')})`)
+    .replace(/\b(con|with)\s+W\b/g,(_,p)=>`${p} ${g('KeyW')}`)
+    .replace(/\b(con|with)\s+S\b/g,(_,p)=>`${p} ${g('KeyS')}`)
+    .replace(/\b(con|with)\s+C\b/g,(_,p)=>`${p} ${g('KeyC')}`);
+}
 function say(t,life=4,who){who=who||(/^Nadador/.test(t)?'s':/^(Kodiak|Los sanitarios|Una víctima en camilla|Víctima en la camilla|La ambulancia|RESCUE|El .* se ha hundido)/.test(t)?'r':'p');
-  t=tr(t);if(state==='play'&&typeof radioTx==='function')radioTx(clamp(t.length*.035,.6,2.4),who==='r'?.05:.035,who==='r'?105:who==='s'?165:135);if(who==='r'){note={t,life};return;}t=t.replace(/^(Nadador|Swimmer): /,'');bub[who]={t:t[0].toUpperCase()+t.slice(1),life:Math.min(life,3)+t.length*.03};}
+  t=fmtInputHints(tr(t));if(state==='play'&&typeof radioTx==='function')radioTx(clamp(t.length*.035,.6,2.4),who==='r'?.05:.035,who==='r'?105:who==='s'?165:135);if(who==='r'){note={t,life};return;}t=t.replace(/^(Nadador|Swimmer): /,'');bub[who]={t:t[0].toUpperCase()+t.slice(1),life:Math.min(life,3)+t.length*.03};}
 function jumpMax(){return 10+M.sea*2.5;}
 function makeVessels(){
   vessels=M.vessels.map(d=>{const t=VT[d.type],c=d.cond,top=Math.max(...t.prof.map(p=>p[2]));
@@ -107,7 +130,7 @@ function startMission(){
   M.water.forEach(dx=>surv.push({v:null,o:0,x:M.dist+dx,y:0,hp:rnd(.75,1),state:'wait',ph:rnd(0,6)}));
   base={ambX:-262,ax:-560,av:0,amb:'away',med:{x:-188,state:'in',t:0,load:null},walk:[]};
   makeBirds();makeClouds();xInit();campInit();
-  state='play';showOnly('');$('#pad').hidden=false;
+  state='play';showOnly('');$('#pad').hidden=false;refreshPadLabels();
   say(M.search?(M.west?`${S.call}: sin posición confirmada. Rumbo oeste y a buscar. ↑ para despegar.`:`${S.call}: sin posición confirmada. Rumbo este y a buscar. ↑ para despegar.`):`${S.call}: ${VT[M.vessels[0].type].n} a ${M.nm} NM al ${M.west?'oeste':'este'}. ↑ para despegar.`,7);
 }
 function makeBirds(){birds=Array.from({length:M.birds},(_,i)=>({x:rnd(-450,800),y:rnd(-190,-60),vx:pick([-1,1])*rnd(22,40),ph:rnd(0,6),by:rnd(-190,-60)}));}
@@ -157,7 +180,7 @@ document.querySelectorAll('#pad button').forEach(b=>{const k=b.dataset.k;
   ['pointerup','pointerleave','pointercancel'].forEach(n=>b.addEventListener(n,()=>{KEY[k]=false;b.classList.remove('on');}));});
 
 // ---------- update ----------
-function crash(why){const h=heli;if(h.dead)return;if(!M.crash){h.vy=-90;h.y-=4;return;}h.dead=true;endT=5;endInfo={fail:why};crashDebris(h);flash=Math.max(flash,.75);
+function crash(why){const h=heli;if(h.dead)return;if(!M.crash){h.vy=-90;h.y-=4;rumble('boom');return;}h.dead=true;endT=5;endInfo={fail:why};crashDebris(h);flash=Math.max(flash,.75);rumble('crash');
   for(let i=0;i<320;i++)parts.push(i%8===0?{k:'flame',x:h.x+rnd(-30,30),y:h.y+rnd(-10,10),vx:rnd(-120,120),vy:rnd(-160,20),life:rnd(.5,1.4),max:1.4,r:rnd(3,8)}:{k:'smoke',x:h.x+rnd(-30,30),y:h.y+rnd(-10,10),vx:rnd(-40,40),vy:rnd(-70,-20),life:rnd(3,6),max:6,r:Math.random()<.3?2:1});}
 function room(){return aboard.length+(hook.load&&hook.load!==sw?1:0)<heli.spec.cap;}
 function envSea(dt){
@@ -169,7 +192,7 @@ function envSea(dt){
     const d=M.wind<0?-1:1,big=Math.random()<.3;rogues.push({x:heli.x-d*rnd(750,950),v:d*rnd(70,105),a:(rnd(16,24)+M.sea*7)*(big?1.6:1),w:rnd(90,160),env:0,big,hit:new Set()});
     say(`¡Ola ${big?'gigante':'grande'} acercándose por el ${d>0?'oeste':'este'}! Gana altura.`,5);}}
   if(M.gust&&state==='play'&&heli&&!heli.landed&&!heli.dead){gustT-=dt;if(gustT<=0&&!gust){gustT=rnd(24,46)/(1+M.gust*.45);const F=[0,90,170,260,360][M.gust],d=Math.random()<.75?(M.wind<0?-1:1):(Math.random()<.5?-1:1);
-      gust={t:0,d:rnd(1.6,4),fx:d*F*rnd(.7,1.2),fy:rnd(-.5,.6)*F};say(M.gust>2?'¡Ráfaga fuerte! Corrige.':'¡Ráfaga!',1.6);}}
+      gust={t:0,d:rnd(1.6,4),fx:d*F*rnd(.7,1.2),fy:rnd(-.5,.6)*F};rumble('gust');say(M.gust>2?'¡Ráfaga fuerte! Corrige.':'¡Ráfaga!',1.6);}}
   if(gust&&(gust.t+=dt)>gust.d)gust=null;
   if(!M.storm)flash=Math.max(0,flash-dt*2.4);
   if(M.storm){boltT-=dt;flash=Math.max(0,flash-dt*2.2);if(boltT<=0){boltT=rnd(4,11);flash=1;const bx=camX+rnd(40,VW-40);let y=camY,x=bx;const p=[x,y];while(y<-10){y+=rnd(14,30);x+=rnd(-16,16);p.push(x,y);}bolt={p,t:.22};}
@@ -187,10 +210,11 @@ function update(dt){
   if(endT>0){endT-=dt;if(endT<=0){finish();return;}}
   if(!h.dead){
     clock+=dt;
-    let ix=(KEY.ArrowRight?1:0)-(KEY.ArrowLeft?1:0),iy=(KEY.ArrowDown?1:0)-(KEY.ArrowUp?1:0);
+    const gp=getFlightInput();
+    let ix=clamp((KEY.ArrowRight?1:0)-(KEY.ArrowLeft?1:0)+gp.x,-1,1),iy=clamp((KEY.ArrowDown?1:0)-(KEY.ArrowUp?1:0)+gp.y,-1,1);
     if(h.fuel<=0){ix=0;iy=0;}
-    if(h.landed){h.vx=h.vy=0;h.gearT=1;if(h.on)xRide();h.rpm+=clamp((h.e1+h.e2)/2-h.rpm,-dt*.3,dt*.42);if(iy<0&&h.fuel>0&&!endT&&h.rpm>.93){h.landed=false;h.on=null;h.vy=-40;}else{h.fuel=Math.min(h.fmax,h.fuel+45*dt);h.flares=M.flares;
-      if(iy<0&&!endT&&h.rpm<=.93&&T-(h.hintT==null?-9:h.hintT)>4){h.hintT=T;say(h.e1&&h.e2?'El rotor aún está cogiendo vueltas.':'Antes de despegar: batería (BAT), motor 1 (ENG 1) y motor 2 (ENG 2).',3.5);}}}
+    if(h.landed){h.vx=h.vy=0;h.gearT=1;if(h.on)xRide();h.rpm+=clamp((h.e1+h.e2)/2-h.rpm,-dt*.3,dt*.42);if(iy<-.35&&h.fuel>0&&!endT&&h.rpm>.93){h.landed=false;h.on=null;h.vy=-40;refreshPadLabels();}else{h.fuel=Math.min(h.fmax,h.fuel+45*dt);h.flares=M.flares;
+      if(iy<-.35&&!endT&&h.rpm<=.93&&T-(h.hintT==null?-9:h.hintT)>4){h.hintT=T;say(h.e1&&h.e2?'El rotor aún está cogiendo vueltas.':'Antes de despegar: batería (BAT), motor 1 (ENG 1) y motor 2 (ENG 2).',3.5);}}}
     else if(!h.bat||!h.e1||!h.e2||h.rpm<1){h.bat=h.e1=h.e2=1;h.rpm=1;}
     if(!h.landed){
       const max=S.max*(h.gear>.5&&!S.fixed?.72:1)*(h.door>.3?.5:1)*X.mx,drag=S.acc/S.max;
@@ -198,7 +222,7 @@ function update(dt){
       h.vy+=((iy<0?iy*X.pw:iy)*S.acc*.9+X.sink-h.vy*1.7+Math.sin(T*2.3+1)*(SEA.a+SEA.s)*1.2)*dt;
       if(h.fuel<=0)h.vy+=330*dt;
       if(gust){const e=Math.sin(gust.t/gust.d*3.14),tb=1+.5*Math.sin(T*13);h.vx+=gust.fx*e*tb*dt;h.vy+=gust.fy*e*tb*dt;h.tilt+=Math.sin(T*17)*.45*e*M.gust*dt;hook.swv+=gust.fx*e*.5*dt;}
-      h.x+=h.vx*dt;h.y+=h.vy*dt;if(ix)h.dir=ix;
+      h.x+=h.vx*dt;h.y+=h.vy*dt;if(Math.abs(ix)>.12)h.dir=ix>0?1:-1;
       if(M.fuelK)h.fuel=Math.max(0,h.fuel-dt*X.burn);
       if(h.fuel<=0&&!h.out){h.out=1;say('¡Sin combustible! Motores parados.',5);}
       {const xmin=M.west?M.dist-1500:WXS-700,xmax=M.west?1300:M.dist+1500;if(h.x<xmin){h.x=xmin;h.vx=0;}if(h.x>xmax){h.x=xmax;h.vx=0;}}
@@ -210,13 +234,14 @@ function update(dt){
     if(!h.landed){
       const bottom=h.y+S.belly+h.gear*S.gear;
       if(!overSea(h.x)&&bottom>=groundY(h.x)){
-        if(h.x<220&&h.x>=WX&&h.gear>.9&&h.vy<120&&Math.abs(h.vx)<80){h.landed=true;h.y=-40-S.belly-S.gear;h.vx=h.vy=0;if(aboard.length)h.doorT=1;say(aboard.length?'En tierra. Abriendo puerta para los sanitarios.':'En tierra, Air Station Kodiak.',3);}
+        if(h.x<220&&h.x>=WX&&h.gear>.9&&h.vy<120&&Math.abs(h.vx)<80){h.landed=true;h.y=-40-S.belly-S.gear;h.vx=h.vy=0;if(aboard.length)h.doorT=1;rumble('land');refreshPadLabels();say(aboard.length?'En tierra. Abriendo puerta para los sanitarios.':'En tierra, Air Station Kodiak.',3);}
         else if(M.crash)crash(h.x>=220||h.x<WX?'Tocaste la orilla fuera de la plataforma.':h.gear<=.9?'Aterrizaste con el tren arriba.':'Toma demasiado dura.');else{h.vy=-60;h.y-=3;if(h.gear<=.9)say('Baja el tren (G) para tomar.',2);}
       }else if((h.x>=220||h.x<WX)&&h.y+S.belly>=wave(h.x)-2)crash('El helicóptero tocó el agua.');
       else for(const v of vessels){if(v.gone)continue;for(const k of [-.6,0,.6]){const o=h.x+k*S.half-v.x;if(Math.abs(o)<=v.half&&heightAt(v,o)&&h.y+S.belly>deckY(v,o)+2){if(!xDeckLand(v,o))crash('Colisión con la embarcación.');break;}}}
     }
     // hoist: only through the open door
-    if(!h.landed&&h.door>.95){if(!X.noHoist){if(KEY.KeyS)hook.L+=95*X.hk*dt;if(KEY.KeyW&&!X.snag)hook.L-=115*X.hk*dt;}}else if(h.landed)hook.L-=115*dt;
+    const hoist=getHoistInput(),hDn=clamp((KEY.KeyS?1:0)+Math.max(0,hoist),0,1),hUp=clamp((KEY.KeyW?1:0)+Math.max(0,-hoist),0,1);
+    if(!h.landed&&h.door>.95){if(!X.noHoist){if(hDn>0)hook.L+=95*hDn*X.hk*dt;if(hUp>0&&!X.snag)hook.L-=115*hUp*X.hk*dt;}}else if(h.landed)hook.L-=115*dt;
     hook.L=clamp(hook.L,0,400);
     if(FIN.on){hook.swv=0;hook.bw=0;hook.sw=FIN.st==='gone'?hook.sw*Math.exp(-8*dt):Math.sin(T*1.25)*5*Math.min(1,hook.L/60);}else
     {const Lk=Math.max(hook.L,24),kk=9*clamp(150/Lk,.55,2.6),lw=hook.load?.45:1,wf=(M.wind*1.5*(1+.45*Math.sin(T*1.3)+.3*Math.sin(T*3.1+1))+(gust?gust.fx*.25:0))*lw;
@@ -289,8 +314,8 @@ function update(dt){
       if(p.state==='wait'&&sw.state!=='gone'){if(Math.abs(p.x-hook.x)<tol&&Math.abs(p.y-7-hook.y)<tol+7&&note.life<=0)say('Sin el nadador no puede engancharse. Envía al nadador.',3);continue;}
       if(Math.abs(p.x-hook.x)<tol&&Math.abs(p.y-7-hook.y)<tol+7){
         if(aboard.length>=S.cap){if(note.life<=0)say('Cabina llena. Lleva a las víctimas a Kodiak.',3);break;}
-        p.state='hook';hook.load=p;say('Víctima en la cesta. Iza con W.',3);break;}}
-    if(!hook.load&&sw.state==='await'&&Math.abs(sw.x-hook.x)<16&&Math.abs(sw.y-7-hook.y)<24){sw.state='riding';hook.load=sw;say('Nadador enganchado. Iza con W.',3);}
+        p.state='hook';hook.load=p;rumble('latch');say('Víctima en la cesta. Iza con W.',3);break;}}
+    if(!hook.load&&sw.state==='await'&&Math.abs(sw.x-hook.x)<16&&Math.abs(sw.y-7-hook.y)<24){sw.state='riding';hook.load=sw;rumble('latch');say('Nadador enganchado. Iza con W.',3);}
   }
   if(hook.load&&hook.load!==sw&&hook.L<=8){hook.load.state='aboard';aboard.push(hook.load);hook.load=null;
     const left=surv.filter(p=>p.state==='wait'||p.state==='ready').length;say(`Víctima a bordo (${aboard.length}/${S.cap}). ${left?'Quedan '+left+'.':'No queda nadie en la zona.'}`,4);}
@@ -342,7 +367,7 @@ function finish(){
   $('#endTitle').textContent=tr(fail?'Aeronave perdida':saved===tot?(M.tut?'Tutorial completado':'Misión cumplida'):saved?'Rescate parcial':'Misión fallida');
   $('#endSub').textContent=`${M.name} · ${heli.spec.name}`;
   $('#endStats').innerHTML=`<div><b>${saved}/${tot}</b><small>${tr('A salvo')}</small></div><div><b>${lost}</b><small>${tr('Perdidos')}</small></div><div><b>${mm}:${ss}</b><small>${tr('Tiempo')}</small></div><div><b>${score}</b><small>${tr('Puntos')}</small></div>`;
-  $('#endTxt').textContent=fail?tr(fail)+tr(' Vuela más despacio cerca del agua, vigila las olas grandes y baja el tren (G) antes de tomar en Kodiak.'):tr(saved===tot?'Todos entregados a la ambulancia en Kodiak. Buen trabajo, tripulación.':'El frío del golfo de Alaska no perdona: en el agua cada segundo cuenta.');$('#rpBtn').hidden=REC.f.length<40;
+  $('#endTxt').textContent=fmtInputHints(fail?tr(fail)+tr(' Vuela más despacio cerca del agua, vigila las olas grandes y baja el tren (G) antes de tomar en Kodiak.'):tr(saved===tot?'Todos entregados a la ambulancia en Kodiak. Buen trabajo, tripulación.':'El frío del golfo de Alaska no perdona: en el agua cada segundo cuenta.'),false);$('#rpBtn').hidden=REC.f.length<40;
   gFinish(saved,tot,fail,score);xFinish(saved,lost,tot,fail);campFinish(saved,tot,fail);state='end';banner='';$('#pad').hidden=true;$('#end').hidden=false;$('#again').focus();
 }
 
@@ -609,13 +634,13 @@ wrap.addEventListener('pointerdown',e=>{if(state==='brief'&&!BRdone&&!e.target.c
 
 // ---------- pause menu and photo mode ----------
 const PH={on:false,x:0,y:0,x0:0,y0:0,bar:true};let phD=null;
-function pauseOpen(){if(state!=='play'||paused)return;paused=true;for(const k in KEY)KEY[k]=false;$('#pause').hidden=false;$('#pad').hidden=true;
+function pauseOpen(){if(state!=='play'||paused)return;paused=true;stopRumble();for(const k in KEY)KEY[k]=false;$('#pause').hidden=false;$('#pad').hidden=true;
   $('#pQuitS').textContent=tr(guard.on?'La guardia queda guardada: podrás continuarla desde este aviso.':'Vuelve al menú principal.');sndUpdate();$('#pResume').focus();}
 function pauseClose(){paused=false;$('#pause').hidden=true;$('#pad').hidden=false;$('#pResume').blur();}
 function photoOn(){PH.on=true;PH.x=PH.x0=camX;PH.y=PH.y0=camY;PH.bar=true;$('#pause').hidden=true;$('#photo').hidden=false;$('#phHint').textContent=tr('Arrastra para mover la cámara · toca para ocultar los botones');}
 function photoOff(){PH.on=false;$('#photo').hidden=true;$('#pause').hidden=false;}
 function phClamp(){PH.x=clamp(PH.x,PH.x0-VW,PH.x0+VW);PH.y=clamp(PH.y,PH.y0-VH*.8,PH.y0+VH*.3);}
-function phPan(dt){PH.x+=((KEY.ArrowRight?1:0)-(KEY.ArrowLeft?1:0))*dt*180;PH.y+=((KEY.ArrowDown?1:0)-(KEY.ArrowUp?1:0))*dt*180;phClamp();}
+function phPan(dt){const gp=getPhotoPanInput();PH.x+=clamp((KEY.ArrowRight?1:0)-(KEY.ArrowLeft?1:0)+gp.x,-1,1)*dt*180;PH.y+=clamp((KEY.ArrowDown?1:0)-(KEY.ArrowUp?1:0)+gp.y,-1,1)*dt*180;phClamp();}
 wrap.addEventListener('pointerdown',e=>{if(!PH.on||e.target.closest('button'))return;phD={x:e.clientX,y:e.clientY,m:0};});
 wrap.addEventListener('pointermove',e=>{if(!phD)return;const k=VW/wrap.clientWidth,dx=e.clientX-phD.x,dy=e.clientY-phD.y;phD.m+=Math.abs(dx)+Math.abs(dy);PH.x-=dx*k;PH.y-=dy*k;phD.x=e.clientX;phD.y=e.clientY;phClamp();});
 for(const n of['pointerup','pointercancel'])wrap.addEventListener(n,()=>{if(phD&&PH.on&&phD.m<6){PH.bar=!PH.bar;$('#photo').hidden=!PH.bar;}phD=null;});
@@ -1010,13 +1035,13 @@ function xUpdate(dt){
   for(const p of surv)if(p.jump&&p.v&&p.state==='wait'&&Math.abs(p.x-h.x)<170&&h.y>p.y-260){p.jump=0;const v=p.v;p.x=v.x+(p.o>0?1:-1)*(v.half+12);p.v=null;splash(p.x);say('¡No saltes! ¡Espera al nadador!',3);}
   // cable: snags on structure, swinging basket
   let sn=0;if(hook.L>40&&!h.landed&&!X.noHoist){const x0=h.x+h.dir*S.doorMid,y0=h.y+S.belly;for(let k=1;k<4;k++){const px=lerp(x0,hook.x,k/4),py=lerp(y0,hook.y,k/4),v=vesselAt(px);if(v&&heightAt(v,px-v.x)&&py>deckY(v,px-v.x)+3){sn=1;break;}}}
-  X.snag=sn;if(sn){h.vx*=1-3*dt;X.snagT+=dt;if(X.snagT>.25&&!X.snagS){X.snagS=1;X.alarm=2;say('¡Cable enganchado en la estructura! Céntrate o corta con C.',4);}if(X.snagT>5)xCut(1);}else{X.snagT=0;X.snagS=0;}
+  X.snag=sn;if(sn){h.vx*=1-3*dt;X.snagT+=dt;if(X.snagT>.25&&!X.snagS){X.snagS=1;X.alarm=2;rumble('snag');say('¡Cable enganchado en la estructura! Céntrate o corta con C.',4);}if(X.snagT>5)xCut(1);}else{X.snagT=0;X.snagS=0;}
   if(hook.load&&hook.load!==sw&&Math.abs(hook.swv)>120){hook.load.hp-=dt*.12;if(!X.swS){X.swS=1;say('¡La cesta se balancea demasiado!',3);}}else X.swS=0;
   // explosions on burning ships, burning fuel drifting away
   if(M.boom)for(const v of vessels){if(v.gone||!v.fire)continue;
     X.oilT-=dt;if(X.oilT<=0&&X.oil.length<4){X.oilT=rnd(14,26);const w0=rnd(70,130);X.oil.push({x:v.x+(Math.random()<.5?-1:1)*(v.half+w0*.3),w:10,w0,t:0,ig:rnd(5,9),lit:0,vx:(M.wind>0?1:-1)*rnd(3,8)+rnd(-4,4),life:rnd(45,75)});if(X.oil.length===1)say('Kodiak: el barco pierde combustible. Mancha en el agua.',4,'r');}
     if(v.fire>.5&&!X.warnV&&v.fs.length){X.boomT-=dt;if(X.boomT<=0){X.warnV=v;X.warn=3.2;X.seat=pick(v.fs);X.alarm=3;say('¡Va a explotar! ¡Aléjate del barco!',3);}}}
-  if(X.warnV){X.warn-=dt;if(X.warn<=0){const v=X.warnV,ex=v.x+X.seat,ey=deckY(v,X.seat);X.warnV=null;X.boomT=rnd(30,60);flash=1;boomSnd(1.5);v.fire=Math.min(1,v.fire+.2);
+  if(X.warnV){X.warn-=dt;if(X.warn<=0){const v=X.warnV,ex=v.x+X.seat,ey=deckY(v,X.seat);X.warnV=null;X.boomT=rnd(30,60);flash=1;boomSnd(1.5);rumble('boom');v.fire=Math.min(1,v.fire+.2);
     for(let i=0;i<280;i++){const a=rnd(0,6.28),sp=rnd(40,330);parts.push(i%3?{k:'ember',x:ex,y:ey-10,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-90,life:rnd(.6,2),max:2,r:Math.random()<.4?2:1}:{k:'flame',x:ex+rnd(-20,20),y:ey-rnd(0,30),vx:Math.cos(a)*sp*.4,vy:Math.sin(a)*sp*.4-60,life:rnd(.4,1.1),max:1.1,r:rnd(4,10)});}
     const d=Math.hypot(h.x-ex,h.y-ey);if(d<110)crash('La explosión alcanzó al helicóptero.');else if(d<320){const k=(320-d)/320;h.vx+=Math.sign(h.x-ex)*420*k;h.vy-=260*k;say('¡Onda expansiva!',2);}
     for(const p of surv)if((p.state==='wait'||p.state==='ready')&&Math.abs(p.x-ex)<90)p.hp-=.22;if(!v.sinking&&Math.random()<.5)v.sinking=true;}}
@@ -1056,7 +1081,7 @@ function xHud(g){const h=heli,F='8px Silkscreen,monospace';g.font=F;g.textAlign=
   const tg=[];if(X.snag)tg.push('CABLE ENGANCHADO');if(X.eng)tg.push('MOTOR 2');if(X.bingo)tg.push('BINGO');if(X.noHoist)tg.push('SIN CABLE');if(X.jam>0)tg.push('GRÚA LENTA');if(X.noSpot)tg.push('FOCO KO');if(X.ice>.15)tg.push('HIELO '+r(X.ice*100)+'%');
   if(tg.length){const t=tg.map(tr).join('  ');const wy=78+Math.max(16,Math.ceil(30/PXS));g.fillStyle='rgba(60,10,10,.82)';g.fillRect(6,wy,r(g.measureText(t).width)+12,13);g.fillStyle=Math.sin(T*9)>0?'#ff7a5a':'#ffd23a';g.fillText(t,12,wy+10);}
   const rx=VW-138;g.fillStyle='rgba(255,255,255,.16)';g.fillRect(rx+84,48,42,4);g.fillStyle=sw.sta>.5?'#5fe08a':sw.sta>.25?'#f6c62f':'#ff5a4a';g.fillRect(rx+84,48,r(42*sw.sta),4);
-  if(!X.found){g.textAlign='center';g.fillStyle='#f6c62f';g.fillText(tr('BUSCANDO: FOCO (F) Y BENGALAS (H)'),VW/2,50);}}
+  if(!X.found){g.textAlign='center';g.fillStyle='#f6c62f';g.fillText(fmtInputHints(tr('BUSCANDO: FOCO (F) Y BENGALAS (H)')),VW/2,50);}}
 function xFinish(saved,lost,tot,fail){const md=[];
   if(!fail&&saved){if(saved===tot)md.push('Todos a casa');if(clock<60+M.nm*17+tot*24)md.push('Rapidez');if(M.hour>=21||M.hour<5)md.push('Rescate nocturno');if(M.sea>=3)md.push('Mar gruesa');
     if(M.gust>=3)md.push('Contra el viento');if(M.search)md.push('Buen ojo');if(M.trapN&&surv.some(p=>p.free>=1&&p.state==='safe'))md.push('Liberación');if(X.eng)md.push('Con un motor');
@@ -1686,19 +1711,32 @@ function hud(){
     g.fillStyle='#fff';g.font='32px "Jersey 25","Pixelify Sans",Silkscreen,monospace';g.fillText(tr(banner),VW/2,y+31);}
 }
 
-$('#pResume').onclick=pauseClose;$('#pPhoto').onclick=photoOn;$('#pQuit').onclick=()=>{$('#pause').hidden=true;toMain();};$('#phBack').onclick=photoOff;$('#phSave').onclick=photoSave;
-$('#mTut').onclick=tutStart;$('#rpSpeed').onclick=()=>{RP.sp=RP.sp>=4?1:RP.sp*2;$('#rpSpeed').textContent='×'+RP.sp;};$('#rpBtn').onclick=rpStart;$('#rpSkip').onclick=()=>CUT.on?campAdvance():EPI.on?epiEnd():rpEnd();$('#mCont').onclick=guardCont;$('#mLang').onclick=()=>setLang(getLang()==='es'?'en':'es');
+$('#pResume').onclick=pauseClose;$('#pPhoto').onclick=photoOn;$('#pPad').onclick=openGamepadModal;$('#pQuit').onclick=()=>{$('#pause').hidden=true;toMain();};$('#phBack').onclick=photoOff;$('#phSave').onclick=photoSave;
+$('#mTut').onclick=tutStart;$('#rpSpeed').onclick=()=>{RP.sp=RP.sp>=4?1:RP.sp*2;$('#rpSpeed').textContent='×'+RP.sp;};$('#rpBtn').onclick=rpStart;$('#rpSkip').onclick=()=>CUT.on?campAdvance():EPI.on?epiEnd():rpEnd();$('#mCont').onclick=guardCont;$('#mLang').onclick=()=>setLang(getLang()==='es'?'en':'es');$('#mPad').onclick=openGamepadModal;
 $('#form').addEventListener('submit',e=>{e.preventDefault();guard.on=false;toBrief(getCfg());});
 $('#again').onclick=()=>toBrief(cfgCur);$('#toMenu').onclick=toMenu;$('#toMain').onclick=toMain;$('#nextG').onclick=()=>M.camp!=null?campNext():guardNext();$('#mCamp').onclick=campOpen;$('#campBack').onclick=toMain;$('#campReset').onclick=()=>{campSet(0);campOpen();};$('#card').onclick=()=>cardSkip();$('#mGuard').onclick=guardStart;$('#mCustom').onclick=toMenu;$('#mCred').onclick=()=>showOnly('credits');$('#credBack').onclick=toMain;$('#backMain').onclick=toMain;$('#bGo').onclick=startMission;
 $('#mMus').onclick=()=>{MU.on=!MU.on;try{localStorage.setItem('rkMus',MU.on?'1':'0');}catch(e){}if(MU.on)musInit();musLabel();};
 const padOn=matchMedia('(pointer:coarse)').matches;$('#pad').hidden=true;
-if(!padOn){$('#pad').classList.add('pc');const KN={KeyF:'F',KeyL:'L',KeyG:'G',KeyH:'H',KeyD:'D',KeyT:'T',Space:'Esp',KeyR:'R',KeyW:'W',KeyS:'S',KeyB:'B',Digit1:'1',Digit2:'2'};document.querySelectorAll('#pad .ac button,#pad .pw button').forEach(b=>{const i=document.createElement('i');i.textContent=KN[b.dataset.k]||'';b.appendChild(i);});}
+const KN={KeyF:'F',KeyL:'L',KeyG:'G',KeyH:'H',KeyD:'D',KeyT:'T',Space:'Esp',KeyR:'R',KeyW:'W',KeyS:'S',KeyB:'B',Digit1:'1',Digit2:'2'};
+function refreshPadLabels(){
+  const gpMode=getInputMode()==='gamepad',landed=!!(heli&&heli.landed),padEl=$('#pad');
+  padEl.classList.toggle('pc',!padOn);
+  padEl.classList.toggle('gp',gpMode);
+  document.querySelectorAll('#pad .ac button,#pad .pw button').forEach(b=>{
+    let i=b.querySelector('i');
+    if(!i){i=document.createElement('i');b.appendChild(i);}
+    if(gpMode)i.textContent=getGlyph(b.dataset.k,landed);
+    else if(!padOn)i.textContent=KN[b.dataset.k]||'';
+    else i.textContent='';
+  });
+}
+refreshPadLabels();
 const padLit=(c,on)=>{const b=document.querySelector(`#pad button[data-k="${c}"]`);if(b)b.classList.toggle('on',on);};addEventListener('keydown',e=>padLit(e.code,true));addEventListener('keyup',e=>padLit(e.code,false));addEventListener('blur',()=>document.querySelectorAll('#pad button.on').forEach(b=>b.classList.remove('on')));
 
 $('#title').onclick=()=>showOnly('main');addEventListener('keydown',e=>{if(!$('#title').hidden&&!['Shift','Control','Alt','Meta','Tab'].includes(e.key)){e.preventDefault();showOnly('main');}});
 if(document.fonts&&document.fonts.load){document.fonts.load('8px Silkscreen');document.fonts.load('32px "Jersey 25"');}
 let last=performance.now();
-function loop(now){const dt=Math.min(.033,(now-last)/1000);last=now;if(RP.on)rpStep(dt);else if(!paused){update(dt);if(state==='play'&&heli&&!CUT.on&&!FIN.on&&!EPI.on)recTick(dt);}else if(PH.on)phPan(dt);render();padSync();musSync();requestAnimationFrame(loop);}
+function loop(now){const dt=Math.min(.033,(now-last)/1000);last=now;pollGamepad(dt);if(RP.on)rpStep(dt);else if(!paused){update(dt);if(state==='play'&&heli&&!CUT.on&&!FIN.on&&!EPI.on)recTick(dt);}else if(PH.on)phPan(dt);render();padSync();musSync();requestAnimationFrame(loop);}
 
 window.__rk={epi:()=>epiStart(),get e(){return EPI;},get rocks(){return X.rocks;},get X(){return X;},get mu(){return{MU,AC:getAC()};},get x(){return{REC,RP,PH,paused,LANG:getLang(),guard,CS,CUT,FIN};},get s(){return{heli,sw,hook,surv,aboard,base,state,M,vessels,banner,rogues,SPR};},set hour(v){H=v;envT=-9;},set flash(v){flash=v;},get deb(){return debris;},fin:()=>finStart(surv.find(p=>p.v)),get hook(){return hook;},get F(){return FIN;},set bolt(v){bolt=v;}};
 
@@ -1710,6 +1748,39 @@ initAudio({
   getGust: () => gust,
   isCinematic: () => FIN.on || CUT.on || EPI.on,
   isEpiOn: () => EPI.on,
+  say,
+});
+
+initGamepad({
+  getState: () => state,
+  isPaused: () => paused,
+  getHeli: () => heli,
+  getX: () => X,
+  isPhotoOn: () => PH.on,
+  isReplayOn: () => RP.on,
+  isCinematic: () => FIN.on || CUT.on || EPI.on,
+  isTitleVisible: () => !$('#title').hidden,
+  isCardVisible: () => !$('#card').hidden,
+  isBriefDone: () => BRdone,
+  getReplaySpeed: () => RP.sp,
+  press,
+  padLit,
+  pauseOpen,
+  pauseClose,
+  photoOff,
+  photoSave,
+  photoToggleBar: () => { PH.bar = !PH.bar; $('#photo').hidden = !PH.bar; },
+  replayEnd: rpEnd,
+  replayCycleSpeed: () => { RP.sp = RP.sp >= 4 ? 1 : RP.sp * 2; $('#rpSpeed').textContent = '×' + RP.sp; },
+  cinematicSkip: () => { if (CUT.on) campAdvance(); else if (EPI.on) epiEnd(); },
+  titleDismiss: () => showOnly('main'),
+  cardSkip,
+  briefSkip,
+  briefStart: startMission,
+  briefBack: () => guard.on || cfgCur.camp != null ? toMain() : toMenu(),
+  toMain,
+  toMenu,
+  onModeChange: () => refreshPadLabels(),
   say,
 });
 
