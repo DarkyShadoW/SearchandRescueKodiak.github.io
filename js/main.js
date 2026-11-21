@@ -92,8 +92,27 @@ function heightAt(v,o){let h=0;for(const p of v.prof)if(o>=p[0]&&o<=p[1]&&p[2]>h
 function deckY(v,o){return v.brk?v.y-heightAt(v,o)+v.bo*Math.sin(v.ang)+(o-v.bo)*Math.sin(v.ang+(o<v.bo?1:-1)*v.brk*.2)+v.brk*12:v.y-heightAt(v,o)+o*Math.sin(v.ang);}
 function vesselAt(x,pad=0){for(const v of vessels)if(!v.gone&&v.sink<.97&&Math.abs(x-v.x)<v.half-1+pad)return v;return null;}
 function surfAt(x){let s=Math.min(groundY(x),wave(x));const v=vesselAt(x);if(v&&heightAt(v,x-v.x))s=Math.min(s,deckY(v,x-v.x));return s;}
+function fmtInputHints(t,landed=!!(heli&&heli.landed)){
+  if(getInputMode()!=='gamepad')return t;
+  const g=c=>getGlyph(c,landed);
+  return t
+    .replace(/↑(?=\s+(?:para despegar|to take off))/g,g('ArrowUp'))
+    .replace(/\(BAT\)/g,`(${g('KeyB')})`)
+    .replace(/\(ENG 1\)/g,`(${g('Digit1',true)})`)
+    .replace(/\(ENG 2\)/g,`(${g('Digit2',true)})`)
+    .replace(/\(D\)/g,`(${g('KeyD')})`)
+    .replace(/\(W\)/g,`(${g('KeyW')})`)
+    .replace(/\(S\)/g,`(${g('KeyS')})`)
+    .replace(/\(T\)/g,`(${g('KeyT')})`)
+    .replace(/\(G\)/g,`(${g('KeyG',false)})`)
+    .replace(/\(F\)/g,`(${g('KeyF')})`)
+    .replace(/\(H\)/g,`(${g('KeyH')})`)
+    .replace(/\b(con|with)\s+W\b/g,(_,p)=>`${p} ${g('KeyW')}`)
+    .replace(/\b(con|with)\s+S\b/g,(_,p)=>`${p} ${g('KeyS')}`)
+    .replace(/\b(con|with)\s+C\b/g,(_,p)=>`${p} ${g('KeyC')}`);
+}
 function say(t,life=4,who){who=who||(/^Nadador/.test(t)?'s':/^(Kodiak|Los sanitarios|Una víctima en camilla|Víctima en la camilla|La ambulancia|RESCUE|El .* se ha hundido)/.test(t)?'r':'p');
-  t=tr(t);if(state==='play'&&typeof radioTx==='function')radioTx(clamp(t.length*.035,.6,2.4),who==='r'?.05:.035,who==='r'?105:who==='s'?165:135);if(who==='r'){note={t,life};return;}t=t.replace(/^(Nadador|Swimmer): /,'');bub[who]={t:t[0].toUpperCase()+t.slice(1),life:Math.min(life,3)+t.length*.03};}
+  t=fmtInputHints(tr(t));if(state==='play'&&typeof radioTx==='function')radioTx(clamp(t.length*.035,.6,2.4),who==='r'?.05:.035,who==='r'?105:who==='s'?165:135);if(who==='r'){note={t,life};return;}t=t.replace(/^(Nadador|Swimmer): /,'');bub[who]={t:t[0].toUpperCase()+t.slice(1),life:Math.min(life,3)+t.length*.03};}
 function jumpMax(){return 10+M.sea*2.5;}
 function makeVessels(){
   vessels=M.vessels.map(d=>{const t=VT[d.type],c=d.cond,top=Math.max(...t.prof.map(p=>p[2]));
@@ -348,7 +367,7 @@ function finish(){
   $('#endTitle').textContent=tr(fail?'Aeronave perdida':saved===tot?(M.tut?'Tutorial completado':'Misión cumplida'):saved?'Rescate parcial':'Misión fallida');
   $('#endSub').textContent=`${M.name} · ${heli.spec.name}`;
   $('#endStats').innerHTML=`<div><b>${saved}/${tot}</b><small>${tr('A salvo')}</small></div><div><b>${lost}</b><small>${tr('Perdidos')}</small></div><div><b>${mm}:${ss}</b><small>${tr('Tiempo')}</small></div><div><b>${score}</b><small>${tr('Puntos')}</small></div>`;
-  $('#endTxt').textContent=fail?tr(fail)+tr(' Vuela más despacio cerca del agua, vigila las olas grandes y baja el tren (G) antes de tomar en Kodiak.'):tr(saved===tot?'Todos entregados a la ambulancia en Kodiak. Buen trabajo, tripulación.':'El frío del golfo de Alaska no perdona: en el agua cada segundo cuenta.');$('#rpBtn').hidden=REC.f.length<40;
+  $('#endTxt').textContent=fmtInputHints(fail?tr(fail)+tr(' Vuela más despacio cerca del agua, vigila las olas grandes y baja el tren (G) antes de tomar en Kodiak.'):tr(saved===tot?'Todos entregados a la ambulancia en Kodiak. Buen trabajo, tripulación.':'El frío del golfo de Alaska no perdona: en el agua cada segundo cuenta.'),false);$('#rpBtn').hidden=REC.f.length<40;
   gFinish(saved,tot,fail,score);xFinish(saved,lost,tot,fail);campFinish(saved,tot,fail);state='end';banner='';$('#pad').hidden=true;$('#end').hidden=false;$('#again').focus();
 }
 
@@ -1062,7 +1081,7 @@ function xHud(g){const h=heli,F='8px Silkscreen,monospace';g.font=F;g.textAlign=
   const tg=[];if(X.snag)tg.push('CABLE ENGANCHADO');if(X.eng)tg.push('MOTOR 2');if(X.bingo)tg.push('BINGO');if(X.noHoist)tg.push('SIN CABLE');if(X.jam>0)tg.push('GRÚA LENTA');if(X.noSpot)tg.push('FOCO KO');if(X.ice>.15)tg.push('HIELO '+r(X.ice*100)+'%');
   if(tg.length){const t=tg.map(tr).join('  ');const wy=78+Math.max(16,Math.ceil(30/PXS));g.fillStyle='rgba(60,10,10,.82)';g.fillRect(6,wy,r(g.measureText(t).width)+12,13);g.fillStyle=Math.sin(T*9)>0?'#ff7a5a':'#ffd23a';g.fillText(t,12,wy+10);}
   const rx=VW-138;g.fillStyle='rgba(255,255,255,.16)';g.fillRect(rx+84,48,42,4);g.fillStyle=sw.sta>.5?'#5fe08a':sw.sta>.25?'#f6c62f':'#ff5a4a';g.fillRect(rx+84,48,r(42*sw.sta),4);
-  if(!X.found){g.textAlign='center';g.fillStyle='#f6c62f';g.fillText(tr('BUSCANDO: FOCO (F) Y BENGALAS (H)'),VW/2,50);}}
+  if(!X.found){g.textAlign='center';g.fillStyle='#f6c62f';g.fillText(fmtInputHints(tr('BUSCANDO: FOCO (F) Y BENGALAS (H)')),VW/2,50);}}
 function xFinish(saved,lost,tot,fail){const md=[];
   if(!fail&&saved){if(saved===tot)md.push('Todos a casa');if(clock<60+M.nm*17+tot*24)md.push('Rapidez');if(M.hour>=21||M.hour<5)md.push('Rescate nocturno');if(M.sea>=3)md.push('Mar gruesa');
     if(M.gust>=3)md.push('Contra el viento');if(M.search)md.push('Buen ojo');if(M.trapN&&surv.some(p=>p.free>=1&&p.state==='safe'))md.push('Liberación');if(X.eng)md.push('Con un motor');

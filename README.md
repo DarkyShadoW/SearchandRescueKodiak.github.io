@@ -34,6 +34,28 @@ Juego de rescate marítimo en helicóptero (U.S. Coast Guard · Air Station Kodi
         └── campaign.js          # Guion, diálogos y misiones del modo campaña
 ```
 
+## Soporte de mandos (USB / Bluetooth)
+
+El juego incluye soporte nativo mediante la **W3C Gamepad API** (sin dependencias externas) para mandos de **Xbox / PC (XInput/DirectInput)**, **PlayStation (DualShock 4 / DualSense)** y **Nintendo Switch (Pro Controller / Joy-Con)**:
+
+- **Detección automática y glifos dinámicos**: los iconos del HUD, tutorial, diálogos y avisos en pantalla cambian automáticamente entre teclado, táctil y el mando detectado (con fallback a Xbox para mandos genéricos de PC).
+- **Vuelo y grúa analógicos**: control proporcional del helicóptero con el Stick Izquierdo (zona muerta radial y curva suave) y control de velocidad de la grúa con los gatillos (`LT/RT` o `L2/R2`) o el Stick Derecho.
+- **Presets y remapeo**: desde el menú **Mando** (en el menú principal o en Pausa) se puede elegir entre el esquema **Estándar (Stick Izq.)** o **Cruceta de vuelo (D-Pad)**, ajustar la zona muerta, activar/desactivar la vibración háptica, probar los ejes/botones en vivo y remapear cada acción.
+- **Seguridad y desconexión**: cortar el cable (`View / Share / -`) requiere mantener pulsado 0,5 s salvo si el cable está enganchado; si el mando se desconecta en vuelo, el juego se pausa automáticamente.
+
+| Acción | Xbox / PC | PlayStation | Nintendo |
+|---|---|---|---|
+| Pilotar | Stick Izq. | Stick Izq. | Stick Izq. |
+| Subir / bajar grúa | `LT` / `RT` o Stick Der. | `L2` / `R2` o Stick Der. | `ZL` / `ZR` o Stick Der. |
+| Desplegar nadador | `A` | `✕` | `B` |
+| Puerta lateral | `B` | `○` | `A` |
+| Modo salto / grúa | `X` | `□` | `Y` |
+| Recoger nadador | `Y` | `△` | `X` |
+| Motor 1 (tierra) / Tren (vuelo) | `LB` | `L1` | `L` |
+| Motor 2 (tierra) / Bengala (vuelo) | `RB` | `R1` | `R` |
+| Batería / Foco / Luces / Silenciar | `D-Pad ◀ / ▲ / ▼ / ▶` | `D-Pad ◀ / ▲ / ▼ / ▶` | `D-Pad ◀ / ▲ / ▼ / ▶` |
+| Cortar cable / Pausa | `View` (0,5 s) / `Menu` | `Share` (0,5 s) / `Options` | `-` (0,5 s) / `+` |
+
 ## Desarrollo local
 
 El proyecto usa ES Modules nativos (`<script type="module">`) y carga las traducciones vía `fetch()`, por lo que requiere servirse mediante HTTP local (no abrir directamente con `file://`):
