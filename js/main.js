@@ -1669,7 +1669,7 @@ function hud(){
   if(NVG){for(const q of[[6,6,168,66],[rx,6,rw,52]]){const X0=Math.round(q[0]*HS),Y0=Math.round(q[1]*HS),W0=Math.round(q[2]*HS),H0=Math.round(q[3]*HS),im=g.getImageData(X0,Y0,W0,H0),a=im.data;
       for(let i=0;i<a.length;i+=4){const R=a[i],G=a[i+1],B=a[i+2];if(R>150&&R>G*1.7)continue;const l=(R+G+B)/3;if(l<70){a[i]=8+l*.25;a[i+1]=46+l*1.1;a[i+2]=22+l*.5;}else{a[i]=Math.min(255,l*.62);a[i+1]=Math.min(255,l*1.3+40);a[i+2]=Math.min(255,l*.72);}}g.putImageData(im,X0,Y0);
       g.save();g.shadowColor='rgba(70,255,130,.85)';g.shadowBlur=9*HS;g.strokeStyle='rgba(90,255,140,.8)';g.lineWidth=1;g.strokeRect(q[0]+.5,q[1]+.5,q[2]-1,q[3]-1);g.strokeRect(q[0]+.5,q[1]+.5,q[2]-1,q[3]-1);g.restore();}}
-  if(M.aids){const ptr=(wx,label,col,dy=0)=>{const sx=wx-camX;if(sx>30&&sx<VW-30)return;const L=sx<=30,x=L?8:VW-8,y=r(VH*.36)+dy;g.fillStyle=col;
+  if(M.aids){const pc={l:0,r:0};const ptr=(wx,label,col,dy=0)=>{const sx=wx-camX;if(sx>30&&sx<VW-30)return;const L=sx<=30,x=L?8:VW-8,y=r(VH*.36)+dy+14*(pc[L?"l":"r"]++);g.fillStyle=col;
       for(let i=0;i<6;i++)g.fillRect(L?x+i:x-i-1,y-i,1,i*2+1);g.font=F(8);g.textAlign=L?'left':'right';g.fillText(`${tr(label)} ${(Math.abs(wx-h.x)/NM).toFixed(1)} NM`,x+(L?10:-10),y+3);};
     const live=surv.filter(p=>p.state==='wait'||p.state==='ready');
     if(live.length){if(X.found)ptr(live.reduce((a,p)=>a+p.x,0)/live.length,'SINIESTRO','#f6c62f');}else if(sw.state!=='aboard'&&sw.state!=='hook')ptr(sw.x,'NADADOR','#d7ff3f');
