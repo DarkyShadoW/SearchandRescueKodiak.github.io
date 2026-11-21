@@ -23,6 +23,7 @@ Juego de rescate marítimo en helicóptero (U.S. Coast Guard · Air Station Kodi
 └── js/
     ├── main.js                  # Núcleo de simulación, física, renderizado, HUD y flujo de menús
     ├── audio.js                 # Música y efectos sintetizados con Web Audio API
+    ├── gamepad.js               # Soporte de mandos USB/BT (Xbox, PlayStation, Nintendo y PC)
     ├── sprites.js               # Generador procedural de sprites pixel-art en canvas
     ├── i18n.js                  # Gestor de idioma y carga diferida de traducciones
     ├── splash.js                # Secuencia de introducción y pantalla completa móvil

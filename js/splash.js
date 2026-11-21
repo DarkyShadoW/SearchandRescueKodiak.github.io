@@ -69,4 +69,5 @@ function showA2HS(done){var d=document.createElement('div');d.id='a2hs';
   g.appendChild(d);void d.offsetWidth;d.classList.add('on');document.getElementById('ahOk').onclick=function(){d.classList.remove('on');setTimeout(function(){d.remove();},350);done();};}
 
 // ---- start: on the first visit from an iPhone the home-screen tip comes first (its button also unlocks the logo's sound); otherwise the logo plays at once
-if(needA2HS())showA2HS(go);else go();})();
+if(needA2HS())showA2HS(go);else go();
+(function gpSplash(){var prev=[];function poll(){if(phase>=4)return;if(navigator.getGamepads){var list=navigator.getGamepads();if(list){for(var i=0;i<list.length;i++){var gp=list[i];if(!gp||!gp.connected)continue;var p=prev[i]||(prev[i]=[]),hit=false;for(var b=0;b<gp.buttons.length;b++){var on=!!(gp.buttons[b]&&(gp.buttons[b].pressed||gp.buttons[b].value>.5));if(on&&!p[b])hit=true;p[b]=on;}if(hit){var ok=document.getElementById('ahOk');if(ok){ok.click();}else if(phase===1){skip();}}}}}requestAnimationFrame(poll);}if(navigator.getGamepads)requestAnimationFrame(poll);})();})();

@@ -62,7 +62,7 @@
         <button class="big alt" type="button" id="mCred">Créditos</button>
       </div>
       <p id="rec" style="margin:0 22px;color:var(--mute);font-size:13px"></p>
-      <div class="chips" style="padding:0 22px"><button class="chip" type="button" id="mMus">Música</button><button class="chip" type="button" id="mLang">Idioma</button></div>
+      <div class="chips" style="padding:0 22px"><button class="chip" type="button" id="mMus">Música</button><button class="chip" type="button" id="mLang">Idioma</button><button class="chip" type="button" id="mPad">Mando</button></div>
     </div>
   </div>
   <div class="ov" id="credits" hidden>
@@ -80,6 +80,7 @@
       <div class="mm">
         <button class="big" type="button" id="pResume">Continuar</button>
         <button class="big alt" type="button" id="pPhoto">Modo foto<small>Oculta los marcadores, mueve la cámara y guarda la imagen.</small></button>
+        <button class="big alt" type="button" id="pPad">Mando<small>Configura los iconos, zona muerta, vibración y botones.</small></button>
         <button class="big alt" type="button" id="pQuit">Abandonar misión<small id="pQuitS"></small></button>
       </div>
     </div>
@@ -119,6 +120,20 @@
           <div><kbd>P</kbd> <kbd>Esc</kbd> pausa: modo foto o abandonar</div>
         </div>
       </div>
+      <div class="sec">
+        <div class="lab">Controles con mando</div>
+        <div class="keys">
+          <div><kbd>Stick Izq.</kbd> pilotar</div>
+          <div><kbd>LT / RT</kbd> o <kbd>Stick Der.</kbd> grúa</div>
+          <div><kbd>A / ✕</kbd> desplegar · <kbd>B / ○</kbd> puerta</div>
+          <div><kbd>X / □</kbd> salto/grúa · <kbd>Y / △</kbd> recoger</div>
+          <div><kbd>LB / L1</kbd> tren (vuelo) · motor 1 (tierra)</div>
+          <div><kbd>RB / R1</kbd> bengala (vuelo) · motor 2 (tierra)</div>
+          <div><kbd>◀</kbd> batería · <kbd>▲</kbd> foco · <kbd>▼</kbd> luces · <kbd>▶</kbd> sonido</div>
+          <div><kbd>View / Share</kbd> cortar cable (0,5 s)</div>
+          <div><kbd>Start / Options</kbd> pausa</div>
+        </div>
+      </div>
       <div class="go"><button class="big" type="submit" id="start">Ir al briefing</button><button class="big alt" type="button" id="backMain">Menú principal</button></div>
     </form>
   </div>
@@ -132,6 +147,38 @@
       <div class="go"><button class="big" id="nextG" type="button" hidden>Siguiente aviso</button><button class="big" id="again" type="button">Repetir</button><button class="big alt" id="rpBtn" type="button">Ver la película</button><button class="big alt" id="toMenu" type="button">Planificar otra</button><button class="big alt" id="toMain" type="button">Menú principal</button></div>
     </div>
   </div>
+
+  <div class="ov" id="padCfg" hidden>
+    <div class="sheet" style="max-width:640px">
+      <div class="band"><h1>Mando</h1><div class="sub">USB · Bluetooth · Xbox · PlayStation · Nintendo · PC</div></div>
+      <div class="sec">
+        <div class="gp-status"><span class="gp-dot" id="gpDot"></span><div><b id="gpName">Ningún mando conectado</b><small id="gpMap">Conecta un mando USB o Bluetooth y pulsa cualquier botón</small></div></div>
+        <div class="gp-test">
+          <div class="gp-stick"><i id="gpStickL"></i><span>L</span></div>
+          <div class="gp-stick"><i id="gpStickR"></i><span>R</span></div>
+          <div class="gp-trigs">
+            <div><small>LT/L2</small><div class="gp-bar"><i id="gpTrigL"></i></div></div>
+            <div><small>RT/R2</small><div class="gp-bar"><i id="gpTrigR"></i></div></div>
+            <div class="gp-btns"><small>Botones:</small> <span id="gpActiveBtns">—</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="grid">
+          <div class="f"><label for="gpGlyph">Estilo de iconos</label><select id="gpGlyph"><option value="auto">Automático</option><option value="xbox">Xbox / PC (A B X Y)</option><option value="ps">PlayStation (✕ ○ □ △)</option><option value="nintendo">Nintendo (B A Y X)</option></select></div>
+          <div class="f"><label for="gpPreset">Esquema de vuelo</label><select id="gpPreset"><option value="analog">Estándar (Stick Izq.)</option><option value="dpad">Cruceta de vuelo (D-Pad)</option></select></div>
+          <div class="f"><label for="gpDeadzone">Zona muerta <output id="gpDeadzoneOut">16%</output></label><input type="range" id="gpDeadzone" min="10" max="35" step="1" value="16"></div>
+          <div class="f"><label for="gpRumble">Vibración</label><select id="gpRumble"><option value="1">Activada</option><option value="0">Desactivada</option></select></div>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="lab">Remapear botones</div>
+        <div class="gp-remap" id="gpRemap"></div>
+      </div>
+      <div class="go"><button class="big alt" type="button" id="gpReset">Restaurar</button><button class="big" type="button" id="gpClose">Cerrar</button></div>
+    </div>
+  </div>
+  <div id="gpToast" hidden></div>
 </div>
 
 <div id="devGate"></div>
